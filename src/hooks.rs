@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{ops::Deref, rc::Rc, sync::Arc};
 
 use common_data_lib::creatures::Creature;
 use yew::prelude::*;
