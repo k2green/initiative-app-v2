@@ -1,7 +1,9 @@
-use std::{cmp::Ordering, slice::{Iter, IterMut}};
+use std::{cmp::Ordering, slice::{Iter, IterMut}, fs::File, path::Path};
 
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
+
+use crate::{BackendError, ToBackendResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum OrderMode {
@@ -28,6 +30,28 @@ impl From<Vec<Creature>> for CreatureContainer {
 }
 
 impl CreatureContainer {
+    pub fn load_from(path: &Path) -> Result<Self, BackendError> {
+        let mut file = File::open(path).to_backend_result()?;
+        let content: Vec<CreatureData> = serde_json::from_reader(&mut file).to_backend_result()?;
+        let content = content.into_iter()
+            .map(|c| Creature::from(c))
+            .collect::<Vec<_>>();
+
+        Ok(Self {
+            ordering: OrderMode::Alphabetical,
+            creatures: content
+        })
+    }
+
+    pub fn save_to(&self, path: &Path) -> Result<(), BackendError> {
+        let mut file = File::create(path).to_backend_result()?;
+        let content = self.creatures.iter()
+            .map(|c| CreatureData::from(c))
+            .collect::<Vec<_>>();
+
+        serde_json::to_writer_pretty(&mut file, &content).to_backend_result()
+    }
+
     pub fn sort(&mut self) {
         match self.ordering {
             OrderMode::Alphabetical => self.creatures.sort_by(alphabetical),
@@ -100,12 +124,53 @@ impl CreatureContainer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreatureData {
+    id: Uuid,
+    name: String,
+    initiative: isize,
+}
+
+impl From<&Creature> for CreatureData {
+    fn from(value: &Creature) -> Self {
+        Self {
+            id: value.id(),
+            name: value.name().to_string(),
+            initiative: value.initiative()
+        }
+    }
+}
+
+impl From<Creature> for CreatureData {
+    fn from(value: Creature) -> Self {
+        CreatureData::from(&value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Creature {
     id: Uuid,
     name: String,
     selected: bool,
     initiative: isize,
     sub_order: isize
+}
+
+impl From<&CreatureData> for Creature {
+    fn from(value: &CreatureData) -> Self {
+        Self {
+            id: value.id,
+            name: value.name.clone(),
+            selected: false,
+            initiative: value.initiative,
+            sub_order: 0
+        }
+    }
+}
+
+impl From<CreatureData> for Creature {
+    fn from(value: CreatureData) -> Self {
+        Creature::from(&value)
+    }
 }
 
 impl std::fmt::Display for Creature {

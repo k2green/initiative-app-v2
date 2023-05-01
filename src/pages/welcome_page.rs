@@ -6,7 +6,7 @@ use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
 use yew_icons::{IconId, Icon};
 
-use crate::{app::AppPage, components::menu::Menu, glue::*, hooks::*};
+use crate::{app::AppPage, components::{menu::Menu, accordion::Accordion}, glue::*, hooks::*};
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 pub struct WelcomePageProps {
@@ -22,15 +22,85 @@ pub fn welcome_page(props: &WelcomePageProps) -> Html {
 
     let open_modal = {
         let is_add_creatures_modal_open = is_add_creatures_modal_open.clone();
-        Callback::from(move |_| {
+        Callback::from(move |_: MouseEvent| {
             is_add_creatures_modal_open.set();
+        })
+    };
+
+    let new_encounter = {
+        let creatures = creatures.clone();
+        let is_menu_open = is_menu_open.clone();
+        Callback::from(move |_: MouseEvent| {
+            let creatures = creatures.clone();
+            let is_menu_open = is_menu_open.clone();
+            new_encounter_with_callback(move |_| {
+                creatures.update();
+                is_menu_open.set(false);
+            });
+        })
+    };
+
+    let reset_encounter = {
+        let creatures = creatures.clone();
+        let is_menu_open = is_menu_open.clone();
+        Callback::from(move |_: MouseEvent| {
+            let creatures = creatures.clone();
+            let is_menu_open = is_menu_open.clone();
+            reset_all_initiatives_with_callback(move |_| {
+                creatures.update();
+                is_menu_open.set(false);
+            });
+        })
+    };
+
+    let open_encounter = {
+        let creatures = creatures.clone();
+        let is_menu_open = is_menu_open.clone();
+        Callback::from(move |_: MouseEvent| {
+            let creatures = creatures.clone();
+            let is_menu_open = is_menu_open.clone();
+            open_encounter_dialog_with_callback(move |path| {
+                let creatures = creatures.clone();
+                let is_menu_open = is_menu_open.clone();
+                if let Some(path) = path {
+                    log::info!("Opening encounter: {:?}", &path);
+                    load_encounter_with_callback(path, move |_| {
+                        creatures.update();
+                        is_menu_open.set(false);
+                    });
+                }
+            });
+        })
+    };
+
+    let save_enocunter = {
+        let is_menu_open = is_menu_open.clone();
+        Callback::from(move |_: MouseEvent| {
+            let is_menu_open = is_menu_open.clone();
+            save_encounter_dialog_with_callback(move |path| {
+                let is_menu_open = is_menu_open.clone();
+                if let Some(path) = path {
+                    log::info!("Saving encounter: {:?}", &path);
+                    save_encounter_with_callback(path, move |_| {
+                        is_menu_open.set(false);
+                    });
+                }
+            });
         })
     };
 
     html! {
         <div class="flex-row stretch">
             <Menu is_open={is_menu_open.clone()}>
-                <h1>{"Test Menu"}</h1>
+                <h1 class="large-horizontal-margin">{"Menu"}</h1>
+                <Accordion title="File">
+                    <button class="menu-button" onclick={new_encounter}>{"New"}</button>
+                    <button class="menu-button" onclick={open_encounter}>{"Open"}</button>
+                    <button class="menu-button" onclick={save_enocunter}>{"Save"}</button>
+                </Accordion>
+                <Accordion title="Edit">
+                    <button class="menu-button" onclick={reset_encounter}>{"Clear initiatives"}</button>
+                </Accordion>
             </Menu>
             <AddCreaturesModal creatures={creatures.clone()} is_visible={is_add_creatures_modal_open.clone()} />
             <main class="no-scroll flex-column">
@@ -63,6 +133,7 @@ fn render_non_empty_creatures(creatures: UseCreaturesHandle) -> Html {
     html! {
         <>
             <SelectAllControl creatures={creatures.clone()} />
+            <hr />
             <div class="flex-column flex-grow-1 scroll-y">
                 {get_creatures_list(creatures.clone())}
             </div>
@@ -232,7 +303,7 @@ fn select_all_control(props: &SelectAllControlProps) -> Html {
     let all_selected = creatures.are_all_selected();
 
     html! {
-        <div class="flex-row">
+        <div class="flex-row select-all">
             <input type="checkbox" checked={all_selected} onchange={set_all_selected} disabled={creatures.is_empty()} />
             <p class="no-margin">{ if all_selected {"Deselect all"} else {"Select all"}}</p>
         </div>

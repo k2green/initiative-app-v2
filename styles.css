@@ -79,6 +79,10 @@ td {
   border: none;
 }
 
+hr {
+  width: calc(100% - 5px);
+}
+
 button.blank {
   background-color: transparent;
   border: none;
@@ -171,6 +175,11 @@ div.empty {
   margin: 0px;
 }
 
+.large-horizontal-margin {
+  margin-left: 40px;
+  margin-right: 40px;
+}
+
 .overlay {
   overflow: hidden;
   width: 100vw;
@@ -213,6 +222,11 @@ div.empty {
   padding: 0px;
 }
 
+.select-all input {
+  margin-left: 10px;
+  margin-right: 15px;
+}
+
 .modal {
   --textarea-width: 320px;
   --textarea-height: 370px;
@@ -233,4 +247,34 @@ div.empty {
   margin: 10px 0px;
   width: var(--textarea-width);
   height: var(--textarea-height);
+}
+
+button.menu-button {
+  background-color: transparent;
+  border: none;
+  border-radius: 0px;
+  text-align: left;
+  margin: 2px 0px;
+}
+
+button.menu-button:hover {
+  background-color: #1A0044;
+}
+
+.accordion {
+  margin: 3px 0px;
+  padding: 4px;
+  background-color: #11002F;
+}
+
+.accordion button.blank {
+  text-align: left;
+}
+
+.accordion p {
+  margin: 0px;
+}
+
+.accordion h3 {
+  margin: 3px 0px;
 }

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use common_data_lib::{BackendError, creatures::Creature};
 use serde::Serialize;
 use uuid::Uuid;
@@ -37,6 +39,43 @@ struct SetSubOrderArgs {
 #[derive(Debug, Serialize)]
 struct SetAllSelectedArgs {
     selected: bool
+}
+
+#[derive(Debug, Serialize)]
+struct PathArgs {
+    path: PathBuf
+}
+
+#[derive(Debug, Serialize)]
+pub struct ExtensionFilter {
+    name: String,
+    extensions: Vec<String>
+}
+
+impl ExtensionFilter {
+    pub fn new(name: impl Into<String>, extensions: Vec<&'static str>) -> Self {
+        Self {
+            name: name.into(),
+            extensions: extensions.into_iter().map(|e| e.to_string()).collect()
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct OpenDialogOptions {
+    #[serde(rename = "defaultPath")]
+    pub default_path: Option<String>,
+    pub directory: bool,
+    pub filters: Option<Vec<ExtensionFilter>>,
+    pub multiple: bool,
+    pub recursive: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SaveDialogOptions {
+    #[serde(rename = "defaultPath")]
+    pub default_path: Option<String>,
+    pub filters: Option<Vec<ExtensionFilter>>,
 }
 
 pub async fn get_creatures() -> Result<Vec<Creature>, Error> {
@@ -118,6 +157,76 @@ pub fn reset_all_initiatives_with_callback(callback: impl Into<Callback<()>>) {
     wasm_bindgen_futures::spawn_local(emit_callback_if_ok(reset_all_initiatives(), callback.into()));
 }
 
+pub async fn save_encounter(path: impl Into<PathBuf>) -> Result<(), Error> {
+    let args = serde_wasm_bindgen::to_value(&PathArgs { path: path.into() }).map_err(Error::SerdeWasmBindgenError)?;
+    invoke("save_encounter", args).await.map_err(js_to_error)?;
+    Ok(())
+}
+
+pub fn save_encounter_with_callback(path: impl Into<PathBuf>, callback: impl Into<Callback<()>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(save_encounter(path.into()), callback.into()));
+}
+
+pub async fn load_encounter(path: impl Into<PathBuf>) -> Result<(), Error> {
+    let args = serde_wasm_bindgen::to_value(&PathArgs { path: path.into() }).map_err(Error::SerdeWasmBindgenError)?;
+    invoke("load_encounter", args).await.map_err(js_to_error)?;
+    Ok(())
+}
+
+pub fn load_encounter_with_callback(path: impl Into<PathBuf>, callback: impl Into<Callback<()>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(load_encounter(path.into()), callback.into()));
+}
+
+pub async fn new_encounter() -> Result<(), Error> {
+    invoke_no_args("new_encounter").await.map_err(js_to_error)?;
+    Ok(())
+}
+
+pub fn new_encounter_with_callback(callback: impl Into<Callback<()>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(new_encounter(), callback.into()));
+}
+
+pub async fn open_encounter_dialog() -> Result<Option<PathBuf>, Error> {
+    let args = OpenDialogOptions {
+        default_path: Some(dirs::home_dir().unwrap_or(PathBuf::from("/home")).to_string_lossy().to_string()),
+        directory: false,
+        multiple: false,
+        recursive: false,
+        filters: get_encounter_filters()
+    };
+
+    let args_value = serde_wasm_bindgen::to_value(&args).map_err(Error::SerdeWasmBindgenError)?;
+    let result = serde_wasm_bindgen::from_value(open(args_value).await).map_err(Error::SerdeWasmBindgenError)?;
+
+    Ok(result)
+}
+
+pub fn open_encounter_dialog_with_callback(callback: impl Into<Callback<Option<PathBuf>>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(open_encounter_dialog(), callback.into()));
+}
+
+pub async fn save_encounter_dialog() -> Result<Option<PathBuf>, Error> {
+    let args = SaveDialogOptions {
+        default_path: Some(dirs::home_dir().unwrap_or(PathBuf::from("/home")).to_string_lossy().to_string()),
+        filters: get_encounter_filters()
+    };
+
+    let args_value = serde_wasm_bindgen::to_value(&args).map_err(Error::SerdeWasmBindgenError)?;
+    let result = serde_wasm_bindgen::from_value(save(args_value).await).map_err(Error::SerdeWasmBindgenError)?;
+
+    Ok(result)
+}
+
+pub fn save_encounter_dialog_with_callback(callback: impl Into<Callback<Option<PathBuf>>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(save_encounter_dialog(), callback.into()));
+}
+
+fn get_encounter_filters() -> Option<Vec<ExtensionFilter>> {
+    Some(vec![
+        ExtensionFilter::new("Encounter", vec!["enc", "encounter"])
+    ])
+}
+
 fn js_to_error(value: JsValue) -> Error {
     match serde_wasm_bindgen::from_value::<BackendError>(value) {
         Ok(err) => Error::BackendError(err),
@@ -132,4 +241,10 @@ extern "C" {
 
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "tauri"], js_name = "invoke", catch)]
     async fn invoke_no_args(cmd: &str) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "dialog"])]
+    async fn open(args: JsValue) -> JsValue;
+
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "dialog"])]
+    async fn save(args: JsValue) -> JsValue;
 }
