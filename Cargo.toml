@@ -17,6 +17,7 @@ log = "0.4.17"
 wasm-logger = "0.2.0"
 uuid = { version = "1.3.1", features = ["v4", "fast-rng", "macro-diagnostics", "serde", "js"] }
 regex = "1.8.1"
+dirs = "5.0.1"
 
 [dependencies.yew_icons]
 version = "0.7.2"

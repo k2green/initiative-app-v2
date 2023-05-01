@@ -110,6 +110,37 @@ fn reset_all_initiatives(state: State<Mutex<AppState>>) -> Result<(), BackendErr
     Ok(())
 }
 
+#[tauri::command]
+fn save_encounter(state: State<Mutex<AppState>>, path: PathBuf) -> Result<(), BackendError> {
+    let guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
+    guard.creatures.save_to(&path)?;
+
+    log::info!("Saved encounter to: '{}'", path.to_string_lossy());
+
+    Ok(())
+}
+
+#[tauri::command]
+fn load_encounter(state: State<Mutex<AppState>>, path: PathBuf) -> Result<(), BackendError> {
+    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
+    let new_creatures = CreatureContainer::load_from(&path)?;
+    guard.creatures = new_creatures;
+
+    log::info!("Loaded encounter from: '{}'", path.to_string_lossy());
+
+    Ok(())
+}
+
+#[tauri::command]
+fn new_encounter(state: State<Mutex<AppState>>) -> Result<(), BackendError> {
+    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
+    guard.creatures = CreatureContainer::default();
+
+    log::info!("Beginning a new encounter");
+
+    Ok(())
+}
+
 fn get_default_state() -> Mutex<AppState> {
     Mutex::new(AppState::default())
 
@@ -140,7 +171,10 @@ fn main() -> Result<(), SetLoggerError> {
             set_creature_initiative,
             set_creature_sub_order,
             set_all_creatures_selected,
-            reset_all_initiatives
+            reset_all_initiatives,
+            save_encounter,
+            load_encounter,
+            new_encounter
         ])
         .setup(|app| {
             #[cfg(debug_assertions)] // only include this code on debug builds
