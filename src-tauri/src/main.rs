@@ -34,7 +34,9 @@ fn get_creatures(state: State<Mutex<AppState>>) -> Result<Vec<Creature>, Backend
 fn add_creatures(state: State<Mutex<AppState>>, creatures: String) -> Result<(), BackendError> {
     let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
     for name in creatures.lines().filter(|l| !l.is_empty()) {
-        guard.creatures.insert(Creature::from(name.trim()));
+        let creature = Creature::from(name);
+        log::info!("Adding new creature: {}", creature);
+        guard.creatures.insert(creature);
     }
 
     Ok(())
@@ -43,7 +45,11 @@ fn add_creatures(state: State<Mutex<AppState>>, creatures: String) -> Result<(),
 #[tauri::command]
 fn remove_creature(state: State<Mutex<AppState>>, id: Uuid) -> Result<Creature, BackendError> {
     let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
-    guard.creatures.remove(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))
+    let creature = guard.creatures.remove(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
+
+    log::info!("Removed creature: {}", creature);
+
+    Ok(creature)
 }
 
 #[tauri::command]
@@ -51,6 +57,8 @@ fn set_creature_selected(state: State<Mutex<AppState>>, id: Uuid, selected: bool
     let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
     let creature = guard.creatures.get_mut(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
     creature.set_selected(selected);
+
+    log::info!("Set creature {} selected state to {}", creature, selected);
 
     Ok(())
 }
@@ -61,6 +69,8 @@ fn set_creature_initiative(state: State<Mutex<AppState>>, id: Uuid, initiative: 
     let creature = guard.creatures.get_mut(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
     creature.set_initiative(initiative);
 
+    log::info!("Set creature {} initiative to {}", creature, initiative);
+
     Ok(())
 }
 
@@ -69,6 +79,8 @@ fn set_creature_sub_order(state: State<Mutex<AppState>>, id: Uuid, sub_order: is
     let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
     let creature = guard.creatures.get_mut(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
     creature.set_sub_order(sub_order);
+
+    log::info!("Set creature {} sub order to {}", creature, sub_order);
 
     Ok(())
 }
@@ -80,6 +92,8 @@ fn set_all_creatures_selected(state: State<Mutex<AppState>>, selected: bool) -> 
         creature.set_selected(selected);
     }
 
+    log::info!("Set all creatures selected state to {}", selected);
+
     Ok(())
 }
 
@@ -90,6 +104,8 @@ fn reset_all_initiatives(state: State<Mutex<AppState>>) -> Result<(), BackendErr
         creature.set_initiative(0);
         creature.set_sub_order(0);
     }
+
+    log::info!("Reset initiative order");
 
     Ok(())
 }

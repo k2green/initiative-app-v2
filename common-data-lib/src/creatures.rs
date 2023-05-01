@@ -108,11 +108,17 @@ pub struct Creature {
     sub_order: isize
 }
 
-impl<T: ToString> From<T> for Creature {
+impl std::fmt::Display for Creature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{ id: '{}', name: '{}'}}", self.id, self.name)
+    }
+}
+
+impl<T: Into<String>> From<T> for Creature {
     fn from(value: T) -> Self {
         Self {
             id: Uuid::new_v4(),
-            name: value.to_string(),
+            name: value.into(),
             selected: false,
             initiative: 0,
             sub_order: 0
