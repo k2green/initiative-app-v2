@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use common_data_lib::creatures::Creature;
+use regex::Regex;
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
 use yew_icons::{IconId, Icon};
 
-use crate::{app::AppPage, components::menu::Menu, glue::{get_creatures_with_callback, remove_creature_with_callback, set_creature_selected_with_callback, add_creatures_with_callback, set_all_creatures_selected_with_callback}, hooks::{use_creatures, UseCreaturesHandle, use_sr_state_eq, UseSrStateHandle}};
+use crate::{app::AppPage, components::menu::Menu, glue::*, hooks::*};
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 pub struct WelcomePageProps {
@@ -60,7 +63,7 @@ fn render_non_empty_creatures(creatures: UseCreaturesHandle) -> Html {
     html! {
         <>
             <SelectAllControl creatures={creatures.clone()} />
-            <div class="flex-grow-1 scroll-y">
+            <div class="flex-column flex-grow-1 scroll-y">
                 {get_creatures_list(creatures.clone())}
             </div>
         </>
@@ -89,6 +92,24 @@ struct CreatureListingProps {
 fn creature_listing(props: &CreatureListingProps) -> Html {
     let CreatureListingProps { creature, update } = props;
     let hover_remove_state = use_sr_state_eq(false);
+
+    let update_initiative = {
+        let initiative = creature.initiative();
+        let update = update.clone();
+        let id = creature.id();
+        Callback::from(move |e: Event| {
+            let update = update.clone();
+            let target: HtmlInputElement = e.target_unchecked_into();
+            let new_value = match validate_initiative_input(& target.value()) {
+                Some(value) => value,
+                None => initiative
+            };
+
+            set_creature_initiative_with_callback(id, new_value, move |_| {
+                update.emit(());
+            });
+        })
+    };
 
     let remove_creature = {
         let hover_remove_state = hover_remove_state.clone();
@@ -137,10 +158,55 @@ fn creature_listing(props: &CreatureListingProps) -> Html {
         <div class="flex-row list-item">
             <input type="checkbox" checked={creature.selected()} onchange={set_selected} />
             <p class="flex-grow-1">{creature.name()}</p>
+            <input class="text-align-right flex-grow-large" value={creature.initiative().to_string()} onchange={update_initiative} />
             <button class="blank" onclick={remove_creature} onmouseover={on_mouse_over} onmouseout={on_mouse_out}>
                 <Icon class="fill-color" icon_id={if *hover_remove_state {IconId::BootstrapDashCircleFill} else {IconId::BootstrapDashCircle}} width="15px" height="15px" />
             </button>
         </div>
+    }
+}
+
+fn validate_initiative_input(input: &str) -> Option<isize> {
+    let pattern = match Regex::new(r"^\s*([-+]?)\s*(\d+)\s*$") {
+        Ok(pattern) => pattern,
+        Err(err) => {
+            log::error!("Failed to parse regex pattern: {}", err);
+            return None;
+        }
+    };
+
+    let captures = match pattern.captures(input) {
+        Some(captures) => captures,
+        None => {
+            log::warn!("Could not get regex captures from initiative input: {}", input);
+            return None;
+        }
+    };
+
+    let capture_group_1 = match captures.get(1)  {
+        Some(captures) => captures,
+        None => {
+            log::warn!("Could not get regex capture group 1 from initiative input: {}", input);
+            return None;
+        }
+    };
+
+    let capture_group_2 = match captures.get(2)  {
+        Some(captures) => captures,
+        None => {
+            log::warn!("Could not get regex capture group 2 from initiative input: {}", input);
+            return None;
+        }
+    };
+
+    let full_text = format!("{}{}", capture_group_1.as_str(), capture_group_2.as_str());
+    
+    match isize::from_str_radix(&full_text, 10) {
+        Ok(res) => Some(res),
+        Err(err) => {
+            log::error!("Failed to parse initiative value '{}': {}", full_text, err);
+            None
+        }
     }
 }
 

@@ -1,6 +1,3 @@
-.logo.yew:hover {
-  filter: drop-shadow(0 0 2em #20a88a);
-}
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
@@ -8,7 +5,7 @@
   font-weight: 400;
 
   color: #f6f6f6;
-  background-color: #190045;
+  background-color: #1E004E;
 
   margin: 0px;
   padding: 0px;
@@ -57,9 +54,29 @@ button:active {
 textarea {
   resize: none;
   color: #f6f6f6;
-  background-color: #0B0028;
+  background-color: #08001A;
   border: 1px solid black;
   border-radius: 5px;
+}
+
+input {
+  resize: none;
+  color: #f6f6f6;
+  background-color: #08001A;
+  border: none;
+  border-radius: 3px;
+  padding: 3px 5px;
+  margin: 3px 0px;
+}
+
+tr {
+  height: min-content;
+  border: none;
+}
+
+td {
+  height: min-content;
+  border: none;
 }
 
 button.blank {
@@ -87,6 +104,10 @@ div.empty {
   height: 100%;
 }
 
+.text-align-right {
+  text-align: end;
+}
+
 .flex-row {
   display: flex;
   flex-direction: row;
@@ -99,6 +120,10 @@ div.empty {
 
 .flex-grow-1 {
   flex: 1;
+}
+
+.flex-grow-large {
+  flex: 2;
 }
 
 .center-main-axis {
@@ -155,17 +180,17 @@ div.empty {
   position: absolute;
   left: 0px;
   right: 0px;
-  background-color: #0B0028b0;
+  background-color: #060015b0;
 }
 
 .menu {
-  background-color: #0B0028;
+  background-color: #0A001F;
   height: 100%;
   width: fit-content;
 }
 
 .menu-content {
-  background-color: #15003B;
+  background-color: #1E004E;
   height: 100%;
   width: fit-content;
   padding: 5px 10px;
@@ -176,11 +201,11 @@ div.empty {
 }
 
 .list-item {
-  background-color: #0B0028;
-  border: 2px solid #100032;
+  background-color: #130034;
+  border: none;
   border-radius: 10px;
-  margin: 4px 0px;
-  padding: 0px 5px 0px 10px;
+  margin: 2px 0px;
+  padding: 2px 5px 2px 10px;
 }
 
 .list-item p {
@@ -192,7 +217,7 @@ div.empty {
   --textarea-width: 320px;
   --textarea-height: 370px;
 
-  background-color: #190045;
+  background-color: #1E004E;
   border-radius: 20px;
   padding: 15px;
   width: fit-content;
