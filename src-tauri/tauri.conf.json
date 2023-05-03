@@ -32,7 +32,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.tauri.dev",
+      "identifier": "com.initiative-app.dev",
       "targets": "all"
     },
     "security": {
@@ -45,7 +45,7 @@
       {
         "fullscreen": false,
         "resizable": true,
-        "title": "initiative-app-v2",
+        "title": "Initiative app",
         "width": 800,
         "height": 600,
         "fileDropEnabled": false
