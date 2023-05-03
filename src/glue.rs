@@ -1,45 +1,12 @@
 use std::path::PathBuf;
 
-use common_data_lib::{BackendError, creatures::Creature};
+use common_data_lib::{BackendError, creatures::{Creature, ConflictGroup}};
 use serde::Serialize;
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
 use yew::Callback;
 
 use crate::{Error, emit_callback_if_ok};
-
-#[derive(Debug, Serialize)]
-struct AddCreaturesArgs {
-    creatures: String
-}
-
-#[derive(Debug, Serialize)]
-struct RemoveCreatureArgs {
-    id: Uuid
-}
-
-#[derive(Debug, Serialize)]
-struct SetSelectedArgs {
-    id: Uuid,
-    selected: bool
-}
-
-#[derive(Debug, Serialize)]
-struct SetInitiativeArgs {
-    id: Uuid,
-    initiative: isize
-}
-
-#[derive(Debug, Serialize)]
-struct SetSubOrderArgs {
-    id: Uuid,
-    sub_order: isize
-}
-
-#[derive(Debug, Serialize)]
-struct SetAllSelectedArgs {
-    selected: bool
-}
 
 #[derive(Debug, Serialize)]
 struct PathArgs {
@@ -87,6 +54,11 @@ pub fn get_creatures_with_callback(callback: impl Into<Callback<Vec<Creature>>>)
     wasm_bindgen_futures::spawn_local(emit_callback_if_ok(get_creatures(), callback.into()));
 }
 
+#[derive(Debug, Serialize)]
+struct AddCreaturesArgs {
+    creatures: String
+}
+
 pub async fn add_creatures(creatures: impl Into<String>) -> Result<(), Error> {
     let args = serde_wasm_bindgen::to_value(&AddCreaturesArgs { creatures: creatures.into() }).map_err(Error::SerdeWasmBindgenError)?;
     invoke("add_creatures", args).await.map_err(js_to_error)?;
@@ -96,6 +68,11 @@ pub async fn add_creatures(creatures: impl Into<String>) -> Result<(), Error> {
 pub fn add_creatures_with_callback(creatures: impl Into<String>, callback: impl Into<Callback<()>>) {
     let creatures = creatures.into();
     wasm_bindgen_futures::spawn_local(emit_callback_if_ok(add_creatures(creatures), callback.into()));
+}
+
+#[derive(Debug, Serialize)]
+struct RemoveCreatureArgs {
+    id: Uuid
 }
 
 pub async fn remove_creature(id: Uuid) -> Result<Creature, Error> {
@@ -108,6 +85,12 @@ pub fn remove_creature_with_callback(id: Uuid, callback: impl Into<Callback<Crea
     wasm_bindgen_futures::spawn_local(emit_callback_if_ok(remove_creature(id), callback.into()));
 }
 
+#[derive(Debug, Serialize)]
+struct SetSelectedArgs {
+    id: Uuid,
+    selected: bool
+}
+
 pub async fn set_creature_selected(id: Uuid, selected: bool) -> Result<(), Error> {
     let args = serde_wasm_bindgen::to_value(&SetSelectedArgs { id, selected }).map_err(Error::SerdeWasmBindgenError)?;
     invoke("set_creature_selected", args).await.map_err(js_to_error)?;
@@ -116,6 +99,12 @@ pub async fn set_creature_selected(id: Uuid, selected: bool) -> Result<(), Error
 
 pub fn set_creature_selected_with_callback(id: Uuid, selected: bool, callback: impl Into<Callback<()>>) {
     wasm_bindgen_futures::spawn_local(emit_callback_if_ok(set_creature_selected(id, selected), callback.into()));
+}
+
+#[derive(Debug, Serialize)]
+struct SetInitiativeArgs {
+    id: Uuid,
+    initiative: isize
 }
 
 pub async fn set_creature_initiative(id: Uuid, initiative: isize) -> Result<(), Error> {
@@ -128,14 +117,9 @@ pub fn set_creature_initiative_with_callback(id: Uuid, initiative: isize, callba
     wasm_bindgen_futures::spawn_local(emit_callback_if_ok(set_creature_initiative(id, initiative), callback.into()));
 }
 
-pub async fn set_creature_sub_order(id: Uuid, sub_order: isize) -> Result<(), Error> {
-    let args = serde_wasm_bindgen::to_value(&SetSubOrderArgs { id, sub_order }).map_err(Error::SerdeWasmBindgenError)?;
-    invoke("set_creature_sub_order", args).await.map_err(js_to_error)?;
-    Ok(())
-}
-
-pub fn set_creature_sub_order_with_callback(id: Uuid, sub_order: isize, callback: impl Into<Callback<()>>) {
-    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(set_creature_sub_order(id, sub_order), callback.into()));
+#[derive(Debug, Serialize)]
+struct SetAllSelectedArgs {
+    selected: bool
 }
 
 pub async fn set_all_creatures_selected(selected: bool) -> Result<(), Error> {
@@ -155,6 +139,53 @@ pub async fn reset_all_initiatives() -> Result<(), Error> {
 
 pub fn reset_all_initiatives_with_callback(callback: impl Into<Callback<()>>) {
     wasm_bindgen_futures::spawn_local(emit_callback_if_ok(reset_all_initiatives(), callback.into()));
+}
+
+#[derive(Debug, Serialize)]
+struct GetConflictsArgs {
+    #[serde(rename = "setConflicts")]
+    set_conflicts: bool
+}
+
+pub async fn get_initiative_conflicts(set_conflicts: bool) -> Result<Vec<ConflictGroup>, Error> {
+    let args = GetConflictsArgs { set_conflicts };
+    let args_value = serde_wasm_bindgen::to_value(&args).map_err(Error::SerdeWasmBindgenError)?;
+    let value = invoke("get_initiative_conflicts", args_value).await.map_err(js_to_error)?;
+    serde_wasm_bindgen::from_value(value).map_err(Error::SerdeWasmBindgenError)
+}
+
+pub fn get_initiative_conflicts_with_callback(set_conflicts: bool, callback: impl Into<Callback<Vec<ConflictGroup>>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(get_initiative_conflicts(set_conflicts), callback.into()));
+}
+
+#[derive(Debug, Serialize)]
+struct MoveConflictArgs {
+    #[serde(rename = "groupIndex")]
+    group_index: usize,
+    #[serde(rename = "moveIndex")]
+    move_index: usize,
+    #[serde(rename = "targetIndex")]
+    target_index: usize
+}
+
+pub async fn move_initiative_conflict(group_index: usize, move_index: usize, target_index: usize) -> Result<(), Error> {
+    let args = MoveConflictArgs { group_index, move_index, target_index };
+    let args_value = serde_wasm_bindgen::to_value(&args).map_err(Error::SerdeWasmBindgenError)?;
+    invoke("move_initiative_conflict", args_value).await.map_err(js_to_error)?;
+    Ok(())
+}
+
+pub fn move_initiative_conflict_with_callback(group_index: usize, move_index: usize, target_index: usize, callback: impl Into<Callback<()>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(move_initiative_conflict(group_index, move_index, target_index), callback.into()));
+}
+
+pub async fn finalize_initiative_order() -> Result<(), Error> {
+    invoke_no_args("finalize_initiative_order").await.map_err(js_to_error)?;
+    Ok(())
+}
+
+pub fn finalize_initiative_order_with_callback(callback: impl Into<Callback<()>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(finalize_initiative_order(), callback.into()));
 }
 
 pub async fn save_encounter(path: impl Into<PathBuf>) -> Result<(), Error> {

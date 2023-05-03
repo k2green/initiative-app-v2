@@ -17,6 +17,10 @@
   -webkit-text-size-adjust: 100%;
 }
 
+*[draggable='true'] {
+  cursor: grab;
+}
+
 body {
   overflow: hidden;
   margin: 0px;
@@ -34,21 +38,27 @@ main {
 }
 
 button {
-  background-color: #E57B02;
+  background-color: #D97F05;
   color: #f6f6f6;
   border-radius: 10px;
   box-shadow: none;
-  border: 2px solid #BD6806;
+  border: 2px solid #B3500A;
 }
 
 button:hover {
-  background-color: #CA6E05;
-  border: 2px solid #A25B08;
+  background-color: #E68F03;
+  border: 2px solid #C05F08;
 }
 
 button:active {
-  background-color: #CA6E05;
-  border: 2px solid #A25B08;
+  background-color: #E68F03;
+  border: 2px solid #C05F08;
+}
+
+button:disabled {
+  background-color: #926824;
+  border: 2px solid #83552d;
+  color: #888888;
 }
 
 textarea {
@@ -277,4 +287,32 @@ button.menu-button:hover {
 
 .accordion h3 {
   margin: 3px 0px;
+}
+
+.conflict-spacer {
+  height: 15px;
+}
+
+.button-group > button:first-of-type:not(:last-of-type) {
+  margin-right: 5px;
+}
+
+.button-group > button:last-of-type:not(:first-of-type) {
+  margin-left: 5px;
+}
+
+.button-group > button:not(:last-of-type):not(:first-of-type) {
+  margin: 0px 5px;
+}
+
+.conflict-accordion {
+  background-color: #130034;
+}
+
+.conflict-accordion p {
+  background-color: #08001A;
+  border: none;
+  border-radius: 10px;
+  margin: 1px 5px;
+  padding: 2px 15px;
 }

@@ -7,45 +7,55 @@ pub mod error;
 use std::{sync::Mutex, path::PathBuf, fs::{self, DirEntry}, cmp::Ordering};
 
 use chrono::Local;
-use common_data_lib::{creatures::{CreatureContainer, Creature, OrderMode}, BackendError, ToBackendResult};
+use common_data_lib::{creatures::{CreatureContainer, Creature, OrderMode, ConflictGroup}, BackendError, ToBackendResult};
 use config::get_app_data_dir;
-use error::log_lock_error;
-use log::{SetLoggerError, LevelFilter};
+use error::{log_lock_error, log};
+use log::{SetLoggerError, LevelFilter, Level};
 use log4rs::{append::{console::{ConsoleAppender, Target}, file::FileAppender}, encode::pattern::PatternEncoder, Config, config::{Appender, Root}, filter::threshold::ThresholdFilter};
 use tauri::{State, Manager};
 use uuid::Uuid;
 
 const MAX_LOG_COUNT: usize = 10;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug)]
 struct AppState {
-    creatures: CreatureContainer,
+    creatures: Mutex<CreatureContainer>,
+    conflicts: Mutex<Option<Vec<ConflictGroup>>>
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            creatures: Mutex::new(CreatureContainer::default()),
+            conflicts: Mutex::new(None)
+        }
+    }
 }
 
 #[tauri::command]
-fn get_creatures(state: State<Mutex<AppState>>) -> Result<Vec<Creature>, BackendError> {
-    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
-    guard.creatures.set_order_mode(OrderMode::Alphabetical);
+fn get_creatures(state: State<AppState>) -> Result<Vec<Creature>, BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    creatures_guard.set_order_mode(OrderMode::Alphabetical);
 
-    Ok(guard.creatures.cloned())
+    Ok(creatures_guard.cloned())
 }
 
 #[tauri::command]
-fn add_creatures(state: State<Mutex<AppState>>, creatures: String) -> Result<(), BackendError> {
-    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
+fn add_creatures(state: State<AppState>, creatures: String) -> Result<(), BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
     for name in creatures.lines().filter(|l| !l.is_empty()) {
         let creature = Creature::from(name);
         log::info!("Adding new creature: {}", creature);
-        guard.creatures.insert(creature);
+        creatures_guard.insert(creature);
     }
 
     Ok(())
 }
 
 #[tauri::command]
-fn remove_creature(state: State<Mutex<AppState>>, id: Uuid) -> Result<Creature, BackendError> {
-    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
-    let creature = guard.creatures.remove(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
+fn remove_creature(state: State<AppState>, id: Uuid) -> Result<Creature, BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    let creature = creatures_guard.remove(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
 
     log::info!("Removed creature: {}", creature);
 
@@ -53,9 +63,9 @@ fn remove_creature(state: State<Mutex<AppState>>, id: Uuid) -> Result<Creature, 
 }
 
 #[tauri::command]
-fn set_creature_selected(state: State<Mutex<AppState>>, id: Uuid, selected: bool) -> Result<(), BackendError> {
-    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
-    let creature = guard.creatures.get_mut(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
+fn set_creature_selected(state: State<AppState>, id: Uuid, selected: bool) -> Result<(), BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    let creature = creatures_guard.get_mut(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
     creature.set_selected(selected);
 
     log::info!("Set creature {} selected state to {}", creature, selected);
@@ -64,9 +74,9 @@ fn set_creature_selected(state: State<Mutex<AppState>>, id: Uuid, selected: bool
 }
 
 #[tauri::command]
-fn set_creature_initiative(state: State<Mutex<AppState>>, id: Uuid, initiative: isize) -> Result<(), BackendError> {
-    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
-    let creature = guard.creatures.get_mut(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
+fn set_creature_initiative(state: State<AppState>, id: Uuid, initiative: isize) -> Result<(), BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    let creature = creatures_guard.get_mut(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
     creature.set_initiative(initiative);
 
     log::info!("Set creature {} initiative to {}", creature, initiative);
@@ -75,20 +85,9 @@ fn set_creature_initiative(state: State<Mutex<AppState>>, id: Uuid, initiative: 
 }
 
 #[tauri::command]
-fn set_creature_sub_order(state: State<Mutex<AppState>>, id: Uuid, sub_order: isize) -> Result<(), BackendError> {
-    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
-    let creature = guard.creatures.get_mut(id).ok_or(BackendError::argument_error("id", format!("No creature with id '{}' exists", id)))?;
-    creature.set_sub_order(sub_order);
-
-    log::info!("Set creature {} sub order to {}", creature, sub_order);
-
-    Ok(())
-}
-
-#[tauri::command]
-fn set_all_creatures_selected(state: State<Mutex<AppState>>, selected: bool) -> Result<(), BackendError> {
-    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
-    for creature in guard.creatures.iter_mut() {
+fn set_all_creatures_selected(state: State<AppState>, selected: bool) -> Result<(), BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    for creature in creatures_guard.iter_mut() {
         creature.set_selected(selected);
     }
 
@@ -98,9 +97,9 @@ fn set_all_creatures_selected(state: State<Mutex<AppState>>, selected: bool) -> 
 }
 
 #[tauri::command]
-fn reset_all_initiatives(state: State<Mutex<AppState>>) -> Result<(), BackendError> {
-    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
-    for creature in guard.creatures.iter_mut() {
+fn reset_all_initiatives(state: State<AppState>) -> Result<(), BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    for creature in creatures_guard.iter_mut() {
         creature.set_initiative(0);
         creature.set_sub_order(0);
     }
@@ -111,9 +110,9 @@ fn reset_all_initiatives(state: State<Mutex<AppState>>) -> Result<(), BackendErr
 }
 
 #[tauri::command]
-fn save_encounter(state: State<Mutex<AppState>>, path: PathBuf) -> Result<(), BackendError> {
-    let guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
-    guard.creatures.save_to(&path)?;
+fn save_encounter(state: State<AppState>, path: PathBuf) -> Result<(), BackendError> {
+    let creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    creatures_guard.save_to(&path)?;
 
     log::info!("Saved encounter to: '{}'", path.to_string_lossy());
 
@@ -121,10 +120,10 @@ fn save_encounter(state: State<Mutex<AppState>>, path: PathBuf) -> Result<(), Ba
 }
 
 #[tauri::command]
-fn load_encounter(state: State<Mutex<AppState>>, path: PathBuf) -> Result<(), BackendError> {
-    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
+fn load_encounter(state: State<AppState>, path: PathBuf) -> Result<(), BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
     let new_creatures = CreatureContainer::load_from(&path)?;
-    guard.creatures = new_creatures;
+    *creatures_guard = new_creatures;
 
     log::info!("Loaded encounter from: '{}'", path.to_string_lossy());
 
@@ -132,17 +131,78 @@ fn load_encounter(state: State<Mutex<AppState>>, path: PathBuf) -> Result<(), Ba
 }
 
 #[tauri::command]
-fn new_encounter(state: State<Mutex<AppState>>) -> Result<(), BackendError> {
-    let mut guard = log_lock_error(state.lock(), "Unable to lock app state").to_backend_result()?;
-    guard.creatures = CreatureContainer::default();
+fn new_encounter(state: State<AppState>) -> Result<(), BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    *creatures_guard = CreatureContainer::default();
 
     log::info!("Beginning a new encounter");
 
     Ok(())
 }
 
-fn get_default_state() -> Mutex<AppState> {
-    Mutex::new(AppState::default())
+#[tauri::command]
+fn get_initiative_conflicts(state: State<AppState>, set_conflicts: bool) -> Result<Vec<ConflictGroup>, BackendError> {
+    let creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    let mut conflicts_guard = log_lock_error(state.conflicts.lock(), "Unable to lock conflicts state").to_backend_result()?;
+    
+    if set_conflicts {
+        *conflicts_guard = Some(creatures_guard.get_conflicts());
+    }
+
+    match &*conflicts_guard {
+        None => return Err(log(BackendError::logic_error("Could not get conflicts because they have not been generated"), Level::Error)),
+        Some(conflicts) => Ok(conflicts.clone())
+    }
+}
+
+#[tauri::command]
+fn move_initiative_conflict(state: State<AppState>, group_index: usize, move_index: usize, target_index: usize) -> Result<(), BackendError> {
+    let mut conflicts_guard = log_lock_error(state.conflicts.lock(), "Unable to lock conflicts state").to_backend_result()?;
+    let conflicts = match &mut *conflicts_guard {
+        Some(conflicts) => conflicts,
+        None => return Err(log(BackendError::logic_error("Could not move conflict because they have not been generated"), Level::Error))
+    };
+    
+    if group_index >= conflicts.len() {
+        return Err(log(BackendError::argument_error("group_index", format!("Group index {} is out of bounds", move_index)), Level::Error));
+    }
+
+    let group = &mut conflicts[group_index];
+
+    let creatures = group.creatures_mut();
+    if move_index >= creatures.len() {
+        return Err(log(BackendError::argument_error("move_index", format!("Creature index {} is out of bounds", move_index)), Level::Error));
+    }
+
+    if target_index >= creatures.len() {
+        return Err(log(BackendError::argument_error("target_index", format!("Creature index {} is out of bounds", target_index)), Level::Error));
+    }
+
+    if move_index != target_index {
+        let move_creature = creatures.remove(move_index);
+        creatures.insert(target_index, move_creature);
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn finalize_initiative_order(state: State<AppState>) -> Result<(), BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    let mut conflicts_guard = log_lock_error(state.conflicts.lock(), "Unable to lock conflicts state").to_backend_result()?;
+    if let Some(conflicts) = &mut *conflicts_guard {
+        for group in conflicts {
+            group.finalize(&mut creatures_guard);
+        }
+    }
+
+    creatures_guard.finalize();
+
+    Ok(())
+}
+
+fn get_default_state() -> AppState {
+    AppState::default()
 
     // Mutex::new(AppState {
     //     creatures: CreatureContainer::from(vec! [
@@ -169,9 +229,11 @@ fn main() -> Result<(), SetLoggerError> {
             remove_creature,
             set_creature_selected,
             set_creature_initiative,
-            set_creature_sub_order,
             set_all_creatures_selected,
             reset_all_initiatives,
+            get_initiative_conflicts,
+            move_initiative_conflict,
+            finalize_initiative_order,
             save_encounter,
             load_encounter,
             new_encounter

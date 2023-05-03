@@ -1,9 +1,72 @@
-use std::{cmp::Ordering, slice::{Iter, IterMut}, fs::File, path::Path};
+use std::{cmp::Ordering, slice::{Iter, IterMut}, fs::File, path::Path, collections::HashMap};
 
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
 use crate::{BackendError, ToBackendResult};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct BasicCreature {
+    id: Uuid,
+    name: String
+}
+
+impl From<&Creature> for BasicCreature {
+    fn from(value: &Creature) -> Self {
+        Self {
+            id: value.id(),
+            name: value.name.clone()
+        }
+    }
+}
+
+impl BasicCreature {
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ConflictGroup {
+    initiative: isize,
+    creatures: Vec<BasicCreature>
+}
+
+impl ConflictGroup {
+    pub fn initiative(&self) -> isize {
+        self.initiative
+    }
+
+    pub fn creatures(&self) -> &[BasicCreature] {
+        &self.creatures
+    }
+
+    pub fn creatures_mut(&mut self) -> &mut Vec<BasicCreature> {
+        &mut self.creatures
+    }
+
+    pub fn set_creatures(&mut self, creatures: Vec<BasicCreature>) {
+        self.creatures = creatures
+    }
+
+    pub fn swap(&mut self, a: usize, b: usize) {
+        self.creatures.swap(a, b);
+    }
+
+    pub fn finalize(&self, creatures: &mut CreatureContainer) {
+        let mut index = 0;
+        for basic_creature in self.creatures.iter() {
+            if let Some(creature) = creatures.get_mut(basic_creature.id()) {
+                creature.set_sub_order(index);
+                index += 1;
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum OrderMode {
@@ -20,7 +83,7 @@ pub struct CreatureContainer {
 
 impl From<Vec<Creature>> for CreatureContainer {
     fn from(mut value: Vec<Creature>) -> Self {
-        value.sort_by(alphabetical);
+        value.sort_by(alphabetical_order);
 
         Self {
             ordering: OrderMode::Alphabetical,
@@ -54,8 +117,8 @@ impl CreatureContainer {
 
     pub fn sort(&mut self) {
         match self.ordering {
-            OrderMode::Alphabetical => self.creatures.sort_by(alphabetical),
-            OrderMode::Initiative => self.creatures.sort()
+            OrderMode::Alphabetical => self.creatures.sort_by(alphabetical_order),
+            OrderMode::Initiative => self.creatures.sort_by(finalized_order)
         }
     }
 
@@ -121,6 +184,42 @@ impl CreatureContainer {
     pub fn cloned(&self) -> Vec<Creature> {
         self.creatures.clone()
     }
+
+    pub fn get_conflicts(&self) -> Vec<ConflictGroup> {
+        let mut initiative_map = HashMap::<isize, Vec<BasicCreature>>::new();
+        for creature in self.creatures.iter().filter(|c| c.selected()) {
+            match initiative_map.get_mut(&creature.initiative) {
+                Some(creatures) => creatures.push(BasicCreature::from(creature)),
+                None => {
+                    initiative_map.insert(creature.initiative(), vec![BasicCreature::from(creature)]);
+                }
+            };
+        }
+
+        let mut groups = Vec::new();
+        for (initiative, creatures) in initiative_map.into_iter().filter(|(_, c)| c.len() > 1) {
+            groups.push(ConflictGroup { initiative, creatures });
+        }
+
+        groups.sort_by(|a, b| a.initiative.cmp(&b.initiative));
+
+        for group in groups.iter_mut() {
+            group.creatures.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        }
+
+        groups
+    }
+
+    pub fn finalize(&mut self) {
+        let mut index = 0;
+        let mut creatures = self.creatures.iter_mut().collect::<Vec<_>>();
+        creatures.sort_by(|a, b| initiative_order(*a, *b));
+
+        for creature in creatures {
+            creature.final_order = index;
+            index += 1;
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,7 +251,8 @@ pub struct Creature {
     name: String,
     selected: bool,
     initiative: isize,
-    sub_order: isize
+    sub_order: isize,
+    final_order: usize
 }
 
 impl From<&CreatureData> for Creature {
@@ -162,7 +262,8 @@ impl From<&CreatureData> for Creature {
             name: value.name.clone(),
             selected: false,
             initiative: value.initiative,
-            sub_order: 0
+            sub_order: 0,
+            final_order: 0,
         }
     }
 }
@@ -186,40 +287,9 @@ impl<T: Into<String>> From<T> for Creature {
             name: value.into(),
             selected: false,
             initiative: 0,
-            sub_order: 0
+            sub_order: 0,
+            final_order: 0,
         }
-    }
-}
-
-impl PartialOrd for Creature {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.initiative.partial_cmp(&other.initiative) {
-            Some(Ordering::Equal) => {},
-            ord => return ord
-        };
-
-        match self.sub_order.partial_cmp(&other.sub_order) {
-            Some(Ordering::Equal) => {},
-            ord => return ord
-        }
-
-        self.name.to_lowercase().partial_cmp(&other.name.to_lowercase())
-    }
-}
-
-impl Ord for Creature {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match self.initiative.cmp(&other.initiative) {
-            Ordering::Equal => {},
-            ord => return ord
-        };
-
-        match self.sub_order.cmp(&other.sub_order) {
-            Ordering::Equal => {},
-            ord => return ord
-        }
-
-        self.name.to_lowercase().cmp(&other.name.to_lowercase())
     }
 }
 
@@ -255,9 +325,31 @@ impl Creature {
     pub fn set_sub_order(&mut self, value: isize) {
         self.sub_order = value;
     }
+
+    pub fn final_order(&self) -> usize {
+        self.final_order
+    }
 }
 
-fn alphabetical(a: &Creature, b: &Creature) -> Ordering {
+fn alphabetical_order(a: &Creature, b: &Creature) -> Ordering {
+    a.name.to_lowercase().cmp(&b.name.to_lowercase())
+}
+
+fn finalized_order(a: &Creature, b: &Creature) -> Ordering {
+    a.final_order.cmp(&b.final_order)
+}
+
+fn initiative_order(a: &Creature, b: &Creature) -> Ordering {
+    match a.initiative.cmp(&b.initiative) {
+        Ordering::Equal => {},
+        ord => return ord
+    };
+
+    match a.sub_order.cmp(&b.sub_order) {
+        Ordering::Equal => {},
+        ord => return ord
+    }
+
     a.name.to_lowercase().cmp(&b.name.to_lowercase())
 }
 
