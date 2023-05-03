@@ -133,6 +133,16 @@ impl DragAndDropReducer {
     }
 }
 
+#[derive(Clone)]
+pub struct DragAndDropCallbacks {
+    pub on_drag_start: Callback<DragEvent>,
+    pub on_drag_over: Callback<DragEvent>,
+    pub on_drag_enter: Callback<DragEvent>,
+    pub on_drag_leave: Callback<DragEvent>,
+    pub on_drag_end: Callback<DragEvent>,
+    pub on_drop: Callback<DragEvent>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct UseDragAndDropHandle {
     reducer: UseReducerHandle<DragAndDropReducer>
@@ -163,6 +173,17 @@ impl UseDragAndDropHandle {
 
     pub fn mouse_position(&self) -> Option<(f64, f64)> {
         self.reducer.mouse_position
+    }
+
+    pub fn callbacks(&self, idx: usize) -> DragAndDropCallbacks {
+        DragAndDropCallbacks {
+            on_drag_start: self.on_drag_start(idx),
+            on_drag_over: self.on_drag_over(idx),
+            on_drag_enter: self.on_drag_enter(idx),
+            on_drag_leave: self.on_drag_leave(idx),
+            on_drag_end: self.on_drag_end(idx),
+            on_drop: self.on_drop(idx)
+        }
     }
 
     pub fn on_drag_start(&self, idx: usize) -> Callback<DragEvent> {

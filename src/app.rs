@@ -1,6 +1,6 @@
 use yew::prelude::*;
 
-use crate::pages::{welcome_page::WelcomePage, conflicts_page::ConflictsPage};
+use crate::pages::{welcome_page::WelcomePage, conflicts_page::ConflictsPage, encounter_page::EncounterPage};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum AppPage {
@@ -34,6 +34,6 @@ fn render_conflicts_page(current_page: UseStateHandle<AppPage>) -> Html {
 
 fn render_encounter_page(current_page: UseStateHandle<AppPage>) -> Html {
     html! {
-        
+        <EncounterPage current_page={current_page} />
     }
 }

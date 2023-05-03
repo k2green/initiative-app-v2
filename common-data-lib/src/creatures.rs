@@ -82,9 +82,7 @@ pub struct CreatureContainer {
 }
 
 impl From<Vec<Creature>> for CreatureContainer {
-    fn from(mut value: Vec<Creature>) -> Self {
-        value.sort_by(alphabetical_order);
-
+    fn from(value: Vec<Creature>) -> Self {
         Self {
             ordering: OrderMode::Alphabetical,
             creatures: value
@@ -106,6 +104,10 @@ impl CreatureContainer {
         })
     }
 
+    pub fn len(&self) -> usize {
+        self.creatures.len()
+    }
+
     pub fn save_to(&self, path: &Path) -> Result<(), BackendError> {
         let mut file = File::create(path).to_backend_result()?;
         let content = self.creatures.iter()
@@ -118,7 +120,7 @@ impl CreatureContainer {
     pub fn sort(&mut self) {
         match self.ordering {
             OrderMode::Alphabetical => self.creatures.sort_by(alphabetical_order),
-            OrderMode::Initiative => self.creatures.sort_by(finalized_order)
+            OrderMode::Initiative => self.creatures.sort_by(initiative_order)
         }
     }
 
@@ -141,9 +143,17 @@ impl CreatureContainer {
             })
     }
 
-    pub fn insert(&mut self, creature: Creature) {
+    pub fn push_and_sort(&mut self, creature: Creature) {
         self.creatures.push(creature);
         self.sort();
+    }
+
+    pub fn push(&mut self, creature: Creature) {
+        self.creatures.push(creature);
+    }
+
+    pub fn insert(&mut self, index: usize, creature: Creature) {
+        self.creatures.insert(index, creature);
     }
 
     pub fn get_by_index(&self, index: usize) -> Option<&Creature> {
@@ -210,15 +220,15 @@ impl CreatureContainer {
         groups
     }
 
-    pub fn finalize(&mut self) {
-        let mut index = 0;
-        let mut creatures = self.creatures.iter_mut().collect::<Vec<_>>();
-        creatures.sort_by(|a, b| initiative_order(*a, *b));
+    pub fn finalize(&self) -> CreatureContainer {
+        let mut creatures = self.creatures.iter()
+            .filter_map(|c| if c.selected() { Some(c.clone()) } else { None })
+            .collect::<Vec<_>>();
 
-        for creature in creatures {
-            creature.final_order = index;
-            index += 1;
-        }
+        creatures.sort_by(initiative_order);
+        creatures.reverse();
+
+        creatures.into()
     }
 }
 
@@ -251,8 +261,7 @@ pub struct Creature {
     name: String,
     selected: bool,
     initiative: isize,
-    sub_order: isize,
-    final_order: usize
+    sub_order: isize
 }
 
 impl From<&CreatureData> for Creature {
@@ -263,7 +272,6 @@ impl From<&CreatureData> for Creature {
             selected: false,
             initiative: value.initiative,
             sub_order: 0,
-            final_order: 0,
         }
     }
 }
@@ -288,7 +296,6 @@ impl<T: Into<String>> From<T> for Creature {
             selected: false,
             initiative: 0,
             sub_order: 0,
-            final_order: 0,
         }
     }
 }
@@ -325,18 +332,10 @@ impl Creature {
     pub fn set_sub_order(&mut self, value: isize) {
         self.sub_order = value;
     }
-
-    pub fn final_order(&self) -> usize {
-        self.final_order
-    }
 }
 
 fn alphabetical_order(a: &Creature, b: &Creature) -> Ordering {
     a.name.to_lowercase().cmp(&b.name.to_lowercase())
-}
-
-fn finalized_order(a: &Creature, b: &Creature) -> Ordering {
-    a.final_order.cmp(&b.final_order)
 }
 
 fn initiative_order(a: &Creature, b: &Creature) -> Ordering {
@@ -345,7 +344,7 @@ fn initiative_order(a: &Creature, b: &Creature) -> Ordering {
         ord => return ord
     };
 
-    match a.sub_order.cmp(&b.sub_order) {
+    match b.sub_order.cmp(&a.sub_order) {
         Ordering::Equal => {},
         ord => return ord
     }

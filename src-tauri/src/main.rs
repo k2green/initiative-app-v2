@@ -1,14 +1,12 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-pub mod config;
 pub mod error;
 
 use std::{sync::Mutex, path::PathBuf, fs::{self, DirEntry}, cmp::Ordering};
 
 use chrono::Local;
 use common_data_lib::{creatures::{CreatureContainer, Creature, OrderMode, ConflictGroup}, BackendError, ToBackendResult};
-use config::get_app_data_dir;
 use error::{log_lock_error, log};
 use log::{SetLoggerError, LevelFilter, Level};
 use log4rs::{append::{console::{ConsoleAppender, Target}, file::FileAppender}, encode::pattern::PatternEncoder, Config, config::{Appender, Root}, filter::threshold::ThresholdFilter};
@@ -20,14 +18,16 @@ const MAX_LOG_COUNT: usize = 10;
 #[derive(Debug)]
 struct AppState {
     creatures: Mutex<CreatureContainer>,
-    conflicts: Mutex<Option<Vec<ConflictGroup>>>
+    conflicts: Mutex<Option<Vec<ConflictGroup>>>,
+    encounter: Mutex<Option<CreatureContainer>>
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             creatures: Mutex::new(CreatureContainer::default()),
-            conflicts: Mutex::new(None)
+            conflicts: Mutex::new(None),
+            encounter: Mutex::new(None)
         }
     }
 }
@@ -46,7 +46,8 @@ fn add_creatures(state: State<AppState>, creatures: String) -> Result<(), Backen
     for name in creatures.lines().filter(|l| !l.is_empty()) {
         let creature = Creature::from(name);
         log::info!("Adding new creature: {}", creature);
-        creatures_guard.insert(creature);
+        creatures_guard.push_and_sort(creature);
+        creatures_guard.sort();
     }
 
     Ok(())
@@ -190,16 +191,91 @@ fn move_initiative_conflict(state: State<AppState>, group_index: usize, move_ind
 fn finalize_initiative_order(state: State<AppState>) -> Result<(), BackendError> {
     let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
     let mut conflicts_guard = log_lock_error(state.conflicts.lock(), "Unable to lock conflicts state").to_backend_result()?;
+    let mut encounter_guard = log_lock_error(state.encounter.lock(), "Unable to lock encounter state").to_backend_result()?;
     if let Some(conflicts) = &mut *conflicts_guard {
         for group in conflicts {
             group.finalize(&mut creatures_guard);
         }
     }
 
-    creatures_guard.finalize();
+    *encounter_guard = Some(creatures_guard.finalize());
 
     Ok(())
 }
+
+#[tauri::command]
+fn get_active_encounter_creatures(state: State<AppState>) -> Result<Vec<Creature>, BackendError> {
+    let encounter_guard = log_lock_error(state.encounter.lock(), "Unable to lock encounter state").to_backend_result()?;
+
+    match &*encounter_guard {
+        Some(encounter) => Ok(encounter.cloned()),
+        None => Err(log(BackendError::logic_error("Cannot get encounter because the initiative order has not been finalized"), Level::Error)) 
+    }
+}
+
+#[tauri::command]
+fn add_creatures_to_active_encounter(state: State<AppState>, creatures: String) -> Result<(), BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    let mut encounter_guard = log_lock_error(state.encounter.lock(), "Unable to lock encounter state").to_backend_result()?;
+
+    let encounter = match &mut *encounter_guard {
+        Some(encounter) => encounter,
+        None => return Err(log(BackendError::logic_error("Cannot get encounter because the initiative order has not been finalized"), Level::Error))
+    };
+    
+    for name in creatures.lines() {
+        let trimmed = name.trim();
+        if !trimmed.is_empty() {
+            let mut creature = Creature::from(name);
+            creature.set_selected(true);
+            creatures_guard.push_and_sort(creature.clone());
+            encounter.push(creature);
+        }
+    }
+
+    creatures_guard.sort();
+
+    Ok(())
+}
+
+#[tauri::command]
+fn change_active_encounter_order(state: State<AppState>, move_index: usize, target_index: usize) -> Result<(), BackendError> {
+    let mut encounter_guard = log_lock_error(state.encounter.lock(), "Unable to lock encounter state").to_backend_result()?;
+    let encounter = match &mut *encounter_guard {
+        Some(encounter) => encounter,
+        None => return Err(log(BackendError::logic_error("Cannot get encounter because the initiative order has not been finalized"), Level::Error))
+    };
+
+    if move_index >= encounter.len() {
+        return Err(log(BackendError::argument_error("move_index", format!("Creature index {} is out of bounds", move_index)), Level::Error));
+    }
+
+    if target_index >= encounter.len() {
+        return Err(log(BackendError::argument_error("target_index", format!("Creature index {} is out of bounds", target_index)), Level::Error));
+    }
+
+    let move_creature = encounter.remove_by_index(move_index);
+    encounter.insert(target_index, move_creature);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_from_active_encounter(state: State<AppState>, id: Uuid) -> Result<(), BackendError> {
+    let mut creatures_guard = log_lock_error(state.creatures.lock(), "Unable to lock creatures state").to_backend_result()?;
+    let mut encounter_guard = log_lock_error(state.encounter.lock(), "Unable to lock encounter state").to_backend_result()?;
+    let encounter = match &mut *encounter_guard {
+        Some(encounter) => encounter,
+        None => return Err(log(BackendError::logic_error("Cannot get encounter because the initiative order has not been finalized"), Level::Error))
+    };
+
+    encounter.remove(id);
+    creatures_guard.get_mut(id)
+        .ok_or(log(BackendError::argument_error("id", format!("No creature found with id '{}'", id)), Level::Error))?
+        .set_selected(false);
+
+    Ok(())
+} 
 
 fn get_default_state() -> AppState {
     AppState::default()
@@ -234,6 +310,10 @@ fn main() -> Result<(), SetLoggerError> {
             get_initiative_conflicts,
             move_initiative_conflict,
             finalize_initiative_order,
+            get_active_encounter_creatures,
+            add_creatures_to_active_encounter,
+            change_active_encounter_order,
+            remove_from_active_encounter,
             save_encounter,
             load_encounter,
             new_encounter
@@ -356,7 +436,9 @@ fn configure_logger() -> Result<(), SetLoggerError> {
 }
 
 fn get_backend_log_dir() -> PathBuf {
-    get_app_data_dir()
+    dirs::data_dir()
+        .unwrap_or(PathBuf::from("/home"))
+        .join("InitiativeApp")
         .join("logs")
         .join("backend")
 }

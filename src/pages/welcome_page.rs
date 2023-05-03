@@ -4,7 +4,7 @@ use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
 use yew_icons::{IconId, Icon};
 
-use crate::{app::AppPage, components::{menu::Menu, accordion::Accordion}, glue::*, hooks::prelude::*};
+use crate::{app::AppPage, components::{menu::Menu, accordion::Accordion, modal::Modal}, glue::*, hooks::prelude::*};
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 pub struct WelcomePageProps {
@@ -358,16 +358,14 @@ fn add_creatures_modal(props: &AddCreaturesModalProps) -> Html {
     };
 
     let content_html = html! {
-        <div class="overlay flex-column center-main-axis center-cross-axis">
-            <div class="modal flex-column">
-                <p>{"This is where you can add new creatures to your encounter. Multiple creatures can be added by splitting names onto new lines."}</p>
-                <textarea onchange={update_text}>{&*creatures_text}</textarea>
-                <div class="flex-row">
-                    <button class="flex-grow-1 space-right" onclick={add_creatures}>{"Add Creatures"}</button>
-                    <button class="flex-grow-1 space-left" onclick={cancel}>{"Cancel"}</button>
-                </div>
+        <Modal>
+            <p>{"This is where you can add new creatures to your encounter. Multiple creatures can be added by splitting names onto new lines."}</p>
+            <textarea onchange={update_text}>{&*creatures_text}</textarea>
+            <div class="flex-row button-group">
+                <button class="flex-grow-1" onclick={add_creatures}>{"Add Creatures"}</button>
+                <button class="flex-grow-1" onclick={cancel}>{"Cancel"}</button>
             </div>
-        </div>
+        </Modal>
     };
 
     html! {

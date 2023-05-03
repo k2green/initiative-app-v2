@@ -188,6 +188,66 @@ pub fn finalize_initiative_order_with_callback(callback: impl Into<Callback<()>>
     wasm_bindgen_futures::spawn_local(emit_callback_if_ok(finalize_initiative_order(), callback.into()));
 }
 
+pub async fn get_active_encounter_creatures() -> Result<Vec<Creature>, Error> {
+    let value = invoke_no_args("get_active_encounter_creatures").await.map_err(js_to_error)?;
+    serde_wasm_bindgen::from_value(value).map_err(Error::SerdeWasmBindgenError)
+}
+
+pub fn get_active_encounter_creatures_with_callback(callback: impl Into<Callback<Vec<Creature>>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(get_active_encounter_creatures(), callback.into()));
+}
+
+#[derive(Debug, Serialize)]
+struct AddCreaturesToTncounterArgs {
+    creatures: String
+}
+
+pub async fn add_creatures_to_active_encounter(creatures: impl Into<String>) -> Result<(), Error> {
+    let args = AddCreaturesToTncounterArgs { creatures: creatures.into() };
+    let args = serde_wasm_bindgen::to_value(&args).map_err(Error::SerdeWasmBindgenError)?;
+    let value = invoke("add_creatures_to_active_encounter", args).await.map_err(js_to_error)?;
+    serde_wasm_bindgen::from_value(value).map_err(Error::SerdeWasmBindgenError)
+}
+
+pub fn add_creatures_to_active_encounter_with_callback(creatures: impl Into<String>, callback: impl Into<Callback<()>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(add_creatures_to_active_encounter(creatures.into()), callback.into()));
+}
+
+#[derive(Debug, Serialize)]
+struct ChangeEncounterOrderArgs {
+    #[serde(rename = "moveIndex")]
+    move_index: usize,
+    #[serde(rename = "targetIndex")]
+    target_index: usize
+}
+
+pub async fn change_active_encounter_order(move_index: usize, target_index: usize) -> Result<(), Error> {
+    let args = ChangeEncounterOrderArgs { move_index, target_index };
+    let args = serde_wasm_bindgen::to_value(&args).map_err(Error::SerdeWasmBindgenError)?;
+    invoke("change_active_encounter_order", args).await.map_err(js_to_error)?;
+    Ok(())
+}
+
+pub fn change_active_encounter_order_with_callback(move_index: usize, target_index: usize, callback: impl Into<Callback<()>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(change_active_encounter_order(move_index, target_index), callback.into()));
+}
+
+#[derive(Debug, Serialize)]
+struct RemoveFromActiveEncounterArgs {
+    id: Uuid
+}
+
+pub async fn remove_from_active_encounter(id: Uuid) -> Result<(), Error> {
+    let args = RemoveFromActiveEncounterArgs { id };
+    let args = serde_wasm_bindgen::to_value(&args).map_err(Error::SerdeWasmBindgenError)?;
+    invoke("remove_from_active_encounter", args).await.map_err(js_to_error)?;
+    Ok(())
+}
+
+pub fn remove_from_active_encounter_with_callback(id: Uuid, callback: impl Into<Callback<()>>) {
+    wasm_bindgen_futures::spawn_local(emit_callback_if_ok(remove_from_active_encounter(id), callback.into()));
+}
+
 pub async fn save_encounter(path: impl Into<PathBuf>) -> Result<(), Error> {
     let args = serde_wasm_bindgen::to_value(&PathArgs { path: path.into() }).map_err(Error::SerdeWasmBindgenError)?;
     invoke("save_encounter", args).await.map_err(js_to_error)?;
