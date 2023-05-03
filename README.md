@@ -1,6 +1,5 @@
-# Tauri + Yew
-
-This template should help get you started developing with Tauri and Yew.
+# Initiative App
+This is a tool designed to help make managing the initiative order of creatures in a TTRPG campaign easier.
 
 ## Recommended IDE Setup
 
