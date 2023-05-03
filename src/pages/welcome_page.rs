@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
 use common_data_lib::creatures::Creature;
 use regex::Regex;
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
 use yew_icons::{IconId, Icon};
 
-use crate::{app::AppPage, components::{menu::Menu, accordion::Accordion}, glue::*, hooks::*};
+use crate::{app::AppPage, components::{menu::Menu, accordion::Accordion}, glue::*, hooks::prelude::*};
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 pub struct WelcomePageProps {
@@ -89,6 +87,13 @@ pub fn welcome_page(props: &WelcomePageProps) -> Html {
         })
     };
 
+    let next_page = {
+        let current_page = current_page.clone();
+        Callback::from(move |_: MouseEvent| {
+            current_page.set(AppPage::ConflictsPage);
+        })
+    };
+
     html! {
         <div class="flex-row stretch">
             <Menu is_open={is_menu_open.clone()}>
@@ -107,7 +112,10 @@ pub fn welcome_page(props: &WelcomePageProps) -> Html {
                 <h1 class="heading">{"Welcome!"}</h1>
                 <p>{"This tool can be used to help track the initiative order of creatures in your encounters."}</p>
                 {render_creatures(creatures.clone())}
-                <button class="stretch-width" onclick={open_modal}>{"+"}</button>
+                <div class="flex-row button-group">
+                    <button class="flex-grow-1" onclick={open_modal}>{"+"}</button>
+                    <button class="flex-grow-1" onclick={next_page} disabled={!creatures.has_selected()}>{"Continue"}</button>
+                </div>
             </main>
         </div>
     }
