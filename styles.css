@@ -316,3 +316,15 @@ button.menu-button:hover {
   margin: 1px 5px;
   padding: 2px 15px;
 }
+
+.encounter-table p {
+  margin: 0px;
+}
+
+.encounter-table div {
+  background-color: #08001A;
+  border: none;
+  border-radius: 10px;
+  margin: 1px 5px;
+  padding: 2px 15px;
+}

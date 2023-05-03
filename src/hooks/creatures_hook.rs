@@ -67,3 +67,21 @@ pub fn use_creatures() -> UseCreaturesHandle {
 
     UseCreaturesHandle { creatures, force_update_state }
 }
+
+#[hook]
+pub fn use_encounter_creatures() -> UseCreaturesHandle {
+    let creatures = use_state_eq(|| Vec::new());
+    let force_update_state = use_state_eq(|| false);
+
+    use_effect_with_deps({
+        let creatures_state = creatures.clone();
+        move |_| {
+            log::info!("Getting encounter");
+            get_active_encounter_creatures_with_callback(Callback::from(move |creatures| {
+                creatures_state.set(creatures);
+            }));
+        }
+    }, force_update_state.clone());
+
+    UseCreaturesHandle { creatures, force_update_state }
+}
